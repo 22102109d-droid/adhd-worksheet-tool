@@ -354,7 +354,7 @@ def process_pdf_single_column(
     from transformers import AutoTokenizer
 
     device = torch.device("cpu")
-    checkpoint = torch.load(bert_dir / "best_model.pt", map_location=device, weights_only=True)
+    checkpoint = torch.load(bert_dir / "best_model.pt", map_location=device, weights_only=False)
     bert_name = checkpoint["bert_name"]  # 从checkpoint读，不写死
     bert_tokenizer = AutoTokenizer.from_pretrained(str(bert_dir / "tokenizer"))
     bert_model = WorksheetSegmenter(
