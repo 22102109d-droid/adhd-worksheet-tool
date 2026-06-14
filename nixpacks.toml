@@ -1,2 +1,5 @@
 [phases.setup]
-aptPkgs = ["fonts-dejavu-core"]
+nixPkgs = ["git-lfs", "dejavu_fonts"]
+
+[phases.install]
+cmds = ["git lfs pull", "pip install -r requirements.txt"]
