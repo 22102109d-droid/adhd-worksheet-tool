@@ -42,10 +42,9 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 pdfmetrics.registerFont(TTFont("DejaVuSans", os.path.join(FONT_DIR, "DejaVuSans.ttf")))
-pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
-pdfmetrics.registerFont(TTFont("DejaVuSans-Oblique", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"))
-pdfmetrics.registerFont(TTFont("DejaVuSans-BoldOblique", "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"))
-
+pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf")))
+pdfmetrics.registerFont(TTFont("DejaVuSans-Oblique", os.path.join(FONT_DIR, "DejaVuSans-Oblique.ttf")))
+pdfmetrics.registerFont(TTFont("DejaVuSans-BoldOblique", os.path.join(FONT_DIR, "DejaVuSans-BoldOblique.ttf")))
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
 registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold",
                     italic="DejaVuSans-Oblique", boldItalic="DejaVuSans-BoldOblique")
