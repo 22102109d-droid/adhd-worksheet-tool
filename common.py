@@ -92,6 +92,137 @@ def extract_lines_from_pdf(pdf_path: str) -> list[dict]:
     return lines
 
 
+def extract_lines_with_rich(pdf_path: str) -> list[dict]:
+    """
+    同时提取纯文本行（供BERT分类）和富文本行（带格式标记，供content字段）。
+    返回列表，每个元素包含:
+      text      - 纯文本（BERT输入）
+      rich      - 富文本（带<b><u><size:><color:>[IMG:]标记）
+      features  - 手工特征dict
+      page      - 页码
+      is_image  - 是否为图片行
+    """
+    import fitz
+    import os
+    import re as _re
+
+    doc = fitz.open(pdf_path)
+    result = []
+    line_id = 0
+
+    for page_num, page in enumerate(doc):
+        d = page.get_text("dict")
+        page_area = page.rect.width * page.rect.height
+        prev_size = None
+
+        for block in d["blocks"]:
+            if block.get("type") != 0:
+                continue
+            for line in block["lines"]:
+                plain_parts = []
+                rich_parts = []
+                for span in line["spans"]:
+                    text = span["text"]
+                    if not text.strip():
+                        plain_parts.append(text)
+                        rich_parts.append(text)
+                        continue
+
+                    plain_parts.append(text)
+
+                    cur_size = round(span["size"], 1)
+                    if cur_size != prev_size:
+                        rich_parts.append(f"<size:{cur_size}>")
+                        prev_size = cur_size
+
+                    color = span.get("color", 0)
+                    if color != 0:
+                        hex_color = f"#{color:06x}" if isinstance(color, int) else str(color)
+                        rich_parts.append(f"<color:{hex_color}>")
+
+                    is_bold = bool(span["flags"] & 16) or bool(
+                        _re.search(r"bold|black|heavy", span["font"], _re.I))
+                    is_underline = bool(span["flags"] & 4)
+
+                    if is_bold and is_underline:
+                        rich_parts.append(f"<b><u>{text}</u></b>")
+                    elif is_bold:
+                        rich_parts.append(f"<b>{text}</b>")
+                    elif is_underline:
+                        rich_parts.append(f"<u>{text}</u>")
+                    else:
+                        rich_parts.append(text)
+
+                plain = "".join(plain_parts).strip()
+                rich = "".join(rich_parts).strip()
+
+                if not plain:
+                    continue
+
+                if _re.match(r"^(Answer\s*Key|Answers?)\s*:?\s*$", plain, _re.IGNORECASE):
+                    doc.close()
+                    return result
+
+                features = {
+                    "has_number_prefix": bool(_re.match(r"^\d+[\.\)\s]", plain)),
+                    "has_roman_prefix": bool(_re.match(r"^(I{1,3}|IV|V|VI{0,3}|IX|X)[\.\)\s]", plain)),
+                    "has_letter_prefix": bool(_re.match(r"^[A-Z][\.\)\s]", plain)),
+                    "has_imperative_verb": bool(_re.match(
+                        r"^(Read|Write|Fill|Match|Circle|Choose|Complete|Listen|Look|"
+                        r"Answer|Underline|Check|Put|Make|Find|Draw|Color|Colour|"
+                        r"Cross|Tick|Sort|Order|Number|Label|Rewrite|Correct|"
+                        r"Translate|Copy|Say|Repeat|Unscramble|Rearrange|Select|"
+                        r"Identify|Highlight|Mark|Discuss|Describe|Compare|Explain|"
+                        r"Use|Give|List|Name|Solve|Calculate|Count|Trace|Cut|Paste|"
+                        r"Glue|Fold|Connect|Join|Link|Group|Classify|Categorize)",
+                        plain, _re.IGNORECASE
+                    )),
+                    "line_length": len(plain),
+                    "indent_level": 0,
+                    "page": page_num,
+                }
+
+                result.append({
+                    "line_id": line_id,
+                    "text": plain,
+                    "rich": rich,
+                    "features": features,
+                    "page": page_num,
+                    "is_image": False,
+                })
+                line_id += 1
+
+        # 图片行
+        for img_index, img in enumerate(page.get_images(full=True)):
+            xref = img[0]
+            try:
+                img_rects = page.get_image_rects(xref)
+                if img_rects:
+                    r = img_rects[0]
+                    w, h = round(r.width, 1), round(r.height, 1)
+                    area_ratio = round((r.width * r.height) / page_area * 100) if page_area else 0
+                    img_filename = f"page{page_num+1}_img{img_index+1}.png"
+                    marker = f"[IMG: {img_filename}, {w}x{h}pt, 占页面{area_ratio}%]"
+                else:
+                    img_filename = f"page{page_num+1}_img{img_index+1}.png"
+                    marker = f"[IMG: {img_filename}]"
+
+                result.append({
+                    "line_id": line_id,
+                    "text": "",
+                    "rich": marker,
+                    "features": {},
+                    "page": page_num,
+                    "is_image": True,
+                })
+                line_id += 1
+            except Exception:
+                pass
+
+    doc.close()
+    return result
+
+
 class WorksheetSegmenter(nn.Module):
     """预训练模型 + 手工特征 → B/I/J 三分类。
     支持 BERT、DeBERTa、XLM-RoBERTa 等任意 HuggingFace 模型。"""
