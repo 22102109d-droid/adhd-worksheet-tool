@@ -7,5 +7,5 @@ reportlab
 anthropic
 volcengine-python-sdk
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
+torch==2.1.2+cpu
 transformers
