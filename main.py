@@ -20,7 +20,27 @@ import shutil
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
+from huggingface_hub import hf_hub_download, snapshot_download
 
+# 启动时自动下载模型
+BERT_MODEL_DIR = os.environ.get("BERT_MODEL_DIR", "model")
+if not os.path.exists(f"{BERT_MODEL_DIR}/best_model.pt"):
+    print("Downloading model from Hugging Face...")
+    os.makedirs(f"{BERT_MODEL_DIR}/tokenizer", exist_ok=True)
+    hf_hub_download(
+        repo_id="mellyii/adhd-bert-model",
+        filename="best_model.pt",
+        local_dir=BERT_MODEL_DIR,
+        token=os.environ.get("HF_TOKEN"),
+    )
+    snapshot_download(
+        repo_id="mellyii/adhd-bert-model",
+        allow_patterns="tokenizer/*",
+        local_dir=BERT_MODEL_DIR,
+        token=os.environ.get("HF_TOKEN"),
+    )
+    print("Model downloaded!")
+    
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -40,7 +60,6 @@ MAX_PAGES = 5
 FILE_RETENTION_HOURS = 24  # 临时文件保留时长
 
 # Level1所需配置 (BERT模型目录 + 豆包API)
-BERT_MODEL_DIR = os.environ.get("BERT_MODEL_DIR", "model")
 DOUBAO_API_KEY = os.environ.get("DOUBAO_API_KEY", "")
 DOUBAO_MODEL_ENDPOINT = os.environ.get("DOUBAO_MODEL_ENDPOINT", "")
 

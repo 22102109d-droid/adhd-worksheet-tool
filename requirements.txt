@@ -9,3 +9,4 @@ volcengine-python-sdk
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu
 transformers
+huggingface_hub
