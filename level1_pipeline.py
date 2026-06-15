@@ -432,7 +432,7 @@ def process_pdf_single_column(
     print(f"共{len(text_lines)}行（不含图片行）")
 
     # Batch推理，一次处理BATCH_SIZE行，速度比逐行快很多
-    BATCH_SIZE = 16
+    BATCH_SIZE = 1
     results = []
     with torch.no_grad():
         for batch_start in range(0, len(text_lines), BATCH_SIZE):
