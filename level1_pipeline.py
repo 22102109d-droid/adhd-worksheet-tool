@@ -355,7 +355,10 @@ def process_pdf_single_column(
 
     device = torch.device("cpu")
     checkpoint = torch.load(bert_dir / "best_model.pt", map_location=device, weights_only=False)
-    bert_name = checkpoint["bert_name"]  # 从checkpoint读，不写死
+    bert_name = checkpoint.get("bert_name", "microsoft/deberta-v3-base")
+# 如果是本地路径就用默认值
+    if bert_name.startswith("/"):
+    bert_name = "microsoft/deberta-v3-base"
     bert_tokenizer = AutoTokenizer.from_pretrained(str(bert_dir / "tokenizer"))
     bert_model = WorksheetSegmenter(
         bert_name=bert_name,
