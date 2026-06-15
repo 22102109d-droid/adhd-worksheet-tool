@@ -44,6 +44,12 @@ import level1_pipeline
 import level2_claude
 import level3_pdf
 
+# 启动时预加载BERT模型到内存，避免每次请求重新加载导致OOM
+if not os.environ.get("MOCK_LEVEL1", "false").lower() == "true":
+    print("预加载BERT模型...")
+    level1_pipeline.preload_bert_model(BERT_MODEL_DIR)
+    print("BERT模型预加载完成，服务就绪")
+
 STORAGE_DIR = Path("storage")
 STORAGE_DIR.mkdir(exist_ok=True)
 

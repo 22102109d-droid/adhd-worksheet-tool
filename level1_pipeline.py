@@ -27,6 +27,49 @@ import fitz
 # torch / transformers / volcenginesdkarkruntime 是重依赖，
 # 只在真正调用对应函数时import，避免mock模式下也要安装这些包
 
+# ================================================================
+# 全局模型缓存（启动时预加载，避免每次请求重新加载）
+# ================================================================
+_BERT_CACHE = {}  # keys: bert_model, bert_tokenizer, context_window, max_length
+
+
+def preload_bert_model(model_dir: str):
+    """
+    在服务启动时调用一次，把BERT模型加载到全局缓存。
+    之后每次请求直接复用，不再重复加载。
+    """
+    global _BERT_CACHE
+    if _BERT_CACHE:
+        print("BERT模型已缓存，跳过重复加载")
+        return
+
+    import torch
+    sys.path.insert(0, str(Path(__file__).parent))
+    from common import WorksheetSegmenter, NUM_CLASSES
+    from transformers import AutoTokenizer
+
+    bert_dir = Path(model_dir)
+    device = torch.device("cpu")
+    checkpoint = torch.load(bert_dir / "best_model.pt", map_location=device, weights_only=False)
+    bert_name = checkpoint.get("bert_name", "microsoft/deberta-v3-base")
+    if bert_name.startswith("/"):
+        bert_name = "microsoft/deberta-v3-base"
+
+    bert_tokenizer = AutoTokenizer.from_pretrained(str(bert_dir / "tokenizer"))
+    bert_model = WorksheetSegmenter(
+        bert_name=bert_name,
+        num_classes=checkpoint.get("num_classes", NUM_CLASSES)
+    ).to(device)
+    bert_model.load_state_dict(checkpoint["model_state_dict"])
+    bert_model.eval()
+
+    _BERT_CACHE["bert_model"] = bert_model
+    _BERT_CACHE["bert_tokenizer"] = bert_tokenizer
+    _BERT_CACHE["context_window"] = checkpoint["context_window"]
+    _BERT_CACHE["max_length"] = checkpoint["max_length"]
+    _BERT_CACHE["device"] = device
+    print(f"BERT模型预加载完成 ({bert_name}, F1={checkpoint['best_f1']:.4f})")
+
 
 # ================================================================
 # Signaling / Multimedia 检测 (与原版一致，规则不变)
@@ -345,29 +388,40 @@ def process_pdf_single_column(
 
     # --- Step 2: 模型切chunk ---
     print("\n模型切chunk...")
-    bert_dir = Path(model_dir)
+    import torch
     sys.path.insert(0, str(Path(__file__).parent))
     from common import (
-        WorksheetSegmenter, NUM_CLASSES, build_context_text,
-        extract_extra_features, extract_lines_with_rich,
+        build_context_text, extract_extra_features, extract_lines_with_rich,
     )
-    from transformers import AutoTokenizer
 
-    device = torch.device("cpu")
-    checkpoint = torch.load(bert_dir / "best_model.pt", map_location=device, weights_only=False)
-    bert_name = checkpoint.get("bert_name", "microsoft/deberta-v3-base")
-    if bert_name.startswith("/"):
-        bert_name = "microsoft/deberta-v3-base"
-    bert_tokenizer = AutoTokenizer.from_pretrained(str(bert_dir / "tokenizer"))
-    bert_model = WorksheetSegmenter(
-        bert_name=bert_name,
-        num_classes=checkpoint.get("num_classes", NUM_CLASSES)
-    ).to(device)
-    bert_model.load_state_dict(checkpoint["model_state_dict"])
-    bert_model.eval()
-    context_window = checkpoint["context_window"]
-    max_length = checkpoint["max_length"]
-    print(f"模型加载完成 ({bert_name}, F1={checkpoint['best_f1']:.4f})")
+    # 优先使用预加载的全局缓存
+    if _BERT_CACHE:
+        bert_model = _BERT_CACHE["bert_model"]
+        bert_tokenizer = _BERT_CACHE["bert_tokenizer"]
+        context_window = _BERT_CACHE["context_window"]
+        max_length = _BERT_CACHE["max_length"]
+        device = _BERT_CACHE["device"]
+        print("使用预加载的BERT模型")
+    else:
+        # fallback: 按需加载（不推荐，会慢且耗内存）
+        from common import WorksheetSegmenter, NUM_CLASSES
+        from transformers import AutoTokenizer
+        bert_dir = Path(model_dir)
+        device = torch.device("cpu")
+        checkpoint = torch.load(bert_dir / "best_model.pt", map_location=device, weights_only=False)
+        bert_name = checkpoint.get("bert_name", "microsoft/deberta-v3-base")
+        if bert_name.startswith("/"):
+            bert_name = "microsoft/deberta-v3-base"
+        bert_tokenizer = AutoTokenizer.from_pretrained(str(bert_dir / "tokenizer"))
+        bert_model = WorksheetSegmenter(
+            bert_name=bert_name,
+            num_classes=checkpoint.get("num_classes", NUM_CLASSES)
+        ).to(device)
+        bert_model.load_state_dict(checkpoint["model_state_dict"])
+        bert_model.eval()
+        context_window = checkpoint["context_window"]
+        max_length = checkpoint["max_length"]
+        print(f"模型按需加载完成 ({bert_name}, F1={checkpoint['best_f1']:.4f})")
 
     all_lines = extract_lines_with_rich(pdf_path)
     text_lines = [l for l in all_lines if not l.get("is_image", False) and l["text"]]
