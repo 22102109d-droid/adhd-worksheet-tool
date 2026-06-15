@@ -23,7 +23,7 @@ import anthropic
 from pathlib import Path
 
 CLAUDE_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
-CLAUDE_MODEL   = "claude-sonnet-4-20250514"
+CLAUDE_MODEL = "claude-sonnet-4-6"
 
 SELECTABLE_STRATEGIES = ["pre_training", "signaling", "task_decomposition", "multimedia"]
 
