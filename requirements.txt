@@ -3,7 +3,6 @@ uvicorn[standard]
 python-multipart
 PyMuPDF
 pdfplumber
-xhtml2pdf
 anthropic
 volcengine-python-sdk
 --extra-index-url https://download.pytorch.org/whl/cpu

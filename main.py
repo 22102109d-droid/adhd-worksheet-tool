@@ -44,9 +44,6 @@ import level1_pipeline
 import level2_claude
 import level3_pdf
 
-# ================================================================
-# 配置
-# ================================================================
 STORAGE_DIR = Path("storage")
 STORAGE_DIR.mkdir(exist_ok=True)
 
@@ -57,10 +54,6 @@ DOUBAO_API_KEY = os.environ.get("DOUBAO_API_KEY", "")
 DOUBAO_MODEL_ENDPOINT = os.environ.get("DOUBAO_MODEL_ENDPOINT", "")
 MOCK_LEVEL1 = os.environ.get("MOCK_LEVEL1", "false").lower() == "true"
 
-
-# ================================================================
-# FastAPI app
-# ================================================================
 app = FastAPI(title="ADHD Worksheet Adapter API")
 
 app.add_middleware(
@@ -71,9 +64,6 @@ app.add_middleware(
 )
 
 
-# ================================================================
-# 工具函数
-# ================================================================
 def get_worksheet_dir(worksheet_id: str) -> Path:
     d = STORAGE_DIR / worksheet_id
     d.mkdir(parents=True, exist_ok=True)
@@ -103,9 +93,6 @@ def check_pdf_pages(pdf_path: Path) -> int:
     return n
 
 
-# ================================================================
-# Level 1 接口
-# ================================================================
 def run_level1_mock(pdf_path: Path, has_two_columns: bool, output_dir: Path) -> list[dict]:
     mock_chunks = [
         {
@@ -152,9 +139,6 @@ def run_level1(pdf_path: Path, has_two_columns: bool, output_dir: Path, image_di
     return chunks
 
 
-# ================================================================
-# Endpoint: 上传PDF
-# ================================================================
 @app.post("/api/upload")
 async def upload_pdf(
     background_tasks: BackgroundTasks,
@@ -236,9 +220,6 @@ async def upload_pdf(
     }
 
 
-# ================================================================
-# Endpoint: 改编 (Level2 + Level3)
-# ================================================================
 @app.post("/api/adapt")
 async def adapt_worksheet(
     worksheet_id: str = Form(...),
@@ -280,15 +261,16 @@ async def adapt_worksheet(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Claude adaptation failed: {e}")
 
-    pdf_path = work_dir / "adapted.pdf"
+    # Level3：直接把HTML复制到输出位置（不转PDF）
+    html_output = work_dir / "adapted.html"
     try:
         level3_pdf.run(
             input_dir=str(adapted_dir),
-            output_path=str(pdf_path),
+            output_path=str(work_dir / "adapted.pdf"),  # level3内部会改成.html
             worksheet_title=meta.get("worksheet_title", "Adapted Worksheet"),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"File generation failed: {e}")
 
     meta["status"] = "adapted"
     meta["selected_strategies"] = selected_strategies
@@ -302,31 +284,26 @@ async def adapt_worksheet(
     }
 
 
-# ================================================================
-# Endpoint: 下载PDF
-# ================================================================
+# 下载endpoint：返回HTML文件
 @app.get("/api/download/{worksheet_id}")
-async def download_pdf(worksheet_id: str):
+async def download_html(worksheet_id: str):
     work_dir = STORAGE_DIR / worksheet_id
-    pdf_path = work_dir / "adapted.pdf"
+    html_path = work_dir / "adapted.html"
 
-    if not pdf_path.exists():
-        raise HTTPException(status_code=404, detail="Adapted PDF not found. Run /api/adapt first.")
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Adapted file not found. Run /api/adapt first.")
 
     meta_path = work_dir / "meta.json"
-    filename = "adapted_worksheet.pdf"
+    filename = "adapted_worksheet.html"
     if meta_path.exists():
         meta = json.loads(meta_path.read_text())
         title = meta.get("worksheet_title", "adapted_worksheet")
         safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in title)
-        filename = f"{safe_title}.pdf"
+        filename = f"{safe_title}.html"
 
-    return FileResponse(path=pdf_path, filename=filename, media_type="application/pdf")
+    return FileResponse(path=html_path, filename=filename, media_type="text/html")
 
 
-# ================================================================
-# Health check
-# ================================================================
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
