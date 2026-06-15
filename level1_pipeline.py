@@ -30,6 +30,10 @@ import fitz
 # ================================================================
 # 全局模型缓存（启动时预加载，避免每次请求重新加载）
 # ================================================================
+
+# ================================================================
+# 全局模型缓存（启动时预加载，避免每次请求重新加载）
+# ================================================================
 _BERT_CACHE = {}  # keys: bert_model, bert_tokenizer, context_window, max_length
 
 
@@ -427,23 +431,32 @@ def process_pdf_single_column(
     text_lines = [l for l in all_lines if not l.get("is_image", False) and l["text"]]
     print(f"共{len(text_lines)}行（不含图片行）")
 
+    # Batch推理，一次处理BATCH_SIZE行，速度比逐行快很多
+    BATCH_SIZE = 16
     results = []
     with torch.no_grad():
-        for i, line in enumerate(text_lines):
-            text = build_context_text(text_lines, i, window=context_window)
-            extra = extract_extra_features(line)
+        for batch_start in range(0, len(text_lines), BATCH_SIZE):
+            batch_lines = text_lines[batch_start: batch_start + BATCH_SIZE]
+            texts = [build_context_text(text_lines, batch_start + j, window=context_window)
+                     for j in range(len(batch_lines))]
+            extras = [extract_extra_features(line) for line in batch_lines]
+
             encoding = bert_tokenizer(
-                text, truncation=True, padding="max_length",
+                texts, truncation=True, padding="max_length",
                 max_length=max_length, return_tensors="pt",
             )
             input_ids = encoding["input_ids"].to(device)
             attention_mask = encoding["attention_mask"].to(device)
-            features = torch.tensor([extra], dtype=torch.float).to(device)
+            features = torch.tensor(extras, dtype=torch.float).to(device)
             logits = bert_model(input_ids, attention_mask, features)
-            probs = torch.softmax(logits, dim=1)[0]
-            pred_class = probs.argmax().item()
-            label = ["I", "B", "J"][pred_class]
-            results.append({"rich": line["rich"], "label": label, "page": line["page"]})
+            probs = torch.softmax(logits, dim=1)
+            pred_classes = probs.argmax(dim=1).tolist()
+
+            for j, (line, pred_class) in enumerate(zip(batch_lines, pred_classes)):
+                label = ["I", "B", "J"][pred_class]
+                results.append({"rich": line["rich"], "label": label, "page": line["page"]})
+
+            print(f"推理进度: {min(batch_start + BATCH_SIZE, len(text_lines))}/{len(text_lines)}")
 
     img_lines = [l for l in all_lines if l.get("is_image", False)]
     img_by_page = {}
