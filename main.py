@@ -47,7 +47,7 @@ import level3_pdf
 STORAGE_DIR = Path("storage")
 STORAGE_DIR.mkdir(exist_ok=True)
 
-MAX_PAGES = 5
+MAX_PAGES = 3
 FILE_RETENTION_HOURS = 24
 
 DOUBAO_API_KEY = os.environ.get("DOUBAO_API_KEY", "")
