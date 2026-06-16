@@ -2,16 +2,6 @@
 level2_claude.py
 ================
 第二层：读取第一层输出的chunk JSON → 调Claude API → 返回改编后的HTML
-
-流程：
-  1. 读取某个worksheet目录下所有 chunk_*.json
-  2. 生成策略缺失报告（供前端展示，让老师勾选）
-  3. 接收老师勾选的策略列表
-  4. 一次性调用Claude API，完成：
-       a. Task Decomposition判断（所有chunk）
-       b. 对勾选策略执行改编
-       c. 直接生成完整的ADHD友好HTML
-  5. 输出HTML字符串，供第三层转PDF
 """
 
 import json
@@ -27,9 +17,7 @@ CLAUDE_MODEL = "claude-sonnet-4-6"
 
 SELECTABLE_STRATEGIES = ["pre_training", "signaling", "task_decomposition", "multimedia"]
 
-# ================================================================
-# Step 1: 读取chunk JSON文件
-# ================================================================
+
 def load_chunks(input_dir: str) -> list[dict]:
     path = Path(input_dir)
     files = sorted(path.glob("chunk_*.json"))
@@ -43,9 +31,6 @@ def load_chunks(input_dir: str) -> list[dict]:
     return chunks
 
 
-# ================================================================
-# Step 2: 生成策略缺失报告（供前端展示）
-# ================================================================
 MULTIMEDIA_SUITABLE_TYPES = {"source_text", "explanation", "discussion", "vocabulary"}
 
 
@@ -83,7 +68,7 @@ def generate_strategy_report(chunks: list[dict]) -> dict:
             "missing_count": None,
             "affected_chunks": "To be determined by AI analysis",
             "title": "Task Decomposition (Step-by-Step)",
-            "why": "Instructions with multiple sequential actions (e.g. 'read, then answer, then discuss') place a heavy load on working memory. Students with ADHD may lose track of later steps. Breaking these into a numbered Step 1 / Step 2 / Step 3 list lets students complete one action at a time (Sweller's Cognitive Load Theory).",
+            "why": "Instructions with multiple sequential actions place a heavy load on working memory. Breaking these into numbered steps lets students complete one action at a time (Sweller's Cognitive Load Theory).",
             "example": {
                 "before": "Read the interview again, then answer the questions, and discuss your answers with a partner.",
                 "after": "Step 1: Read the interview again.\nStep 2: Answer the questions below.\nStep 3: Discuss your answers with a partner."
@@ -93,100 +78,114 @@ def generate_strategy_report(chunks: list[dict]) -> dict:
             "missing_count": len(mm_missing),
             "affected_chunks": mm_missing,
             "title": "Multimedia (Supporting Images)",
-            "why": "Pairing text with a relevant image reduces the load on verbal working memory by letting students process information through both visual and verbal channels (Mayer's Multimedia Principle). Only reading, discussion, and vocabulary sections are suggested here — exercise items like fill-in-the-blank are excluded, since decorative images there add clutter rather than helping comprehension.",
+            "why": "Pairing text with a relevant image reduces the load on verbal working memory (Mayer's Multimedia Principle).",
             "example": {
-                "before": "Text-only discussion prompt about locations in London (Kings Cross, Tufnell Park).",
-                "after": "Same text, with an added placeholder: 'Suggested image: a simple map of London highlighting Kings Cross and Tufnell Park.'"
+                "before": "Text-only discussion prompt.",
+                "after": "Same text, with an added image placeholder."
             }
         }
     }
 
 
-# ================================================================
-# Step 3: System Prompt
-# ================================================================
 SYSTEM_PROMPT = """\
 You are an expert EFL teacher and instructional designer specialising in ADHD-friendly materials.
 
-You will receive worksheet chunks and must:
-1. Apply the selected ADHD strategies to each chunk
-2. Output a SINGLE complete HTML document (not JSON) — a beautiful, print-ready ADHD-friendly worksheet
+You will receive worksheet chunks and must output a SINGLE complete, self-contained HTML document.
 
-=== STRATEGY DEFINITIONS ===
+=== CRITICAL CONTENT RULES ===
+1. NEVER alter any exercise content — every word of questions, answer options, source texts, numbered lines must be IDENTICAL to the input.
+2. Only add: KEY WORDS box, ▶ signaling marker, numbered steps, image placeholder.
+3. If the chunk content contains a TABLE (rows of data with column headers), you MUST render it as a proper HTML <table> with <thead>, <tbody>, <tr>, <th>, <td> tags. Never flatten a table into plain text.
+4. If the chunk content has NUMBERED LINES (lines starting with 1, 2, 3...), render each as a div with the number and a long underline for writing, like: <div class="answer-line"><span class="line-num">1</span><span class="line-blank">____________________________</span></div>
+5. Preserve ALL footnotes exactly as they appear.
+6. Use UTF-8 characters correctly — ▶ ✎ 💡 must render properly.
 
-PRE_TRAINING:
-Add a green "KEY WORDS" box before tasks with no vocabulary preparation.
-Extract 3-5 key vocabulary items from the chunk content.
-Write definitions in simple English (A2-B1 level).
-Skip if has_pre_training is already true.
+=== STRATEGIES TO APPLY ===
 
-SIGNALING:
-Add "▶" before the main instruction.
-Bold key action verbs.
-Add a short "💡 TIP:" if the task is cognitively complex.
-Skip if has_signaling is already true.
+PRE_TRAINING (if selected and has_pre_training is false):
+- Add a green KEY WORDS box BEFORE the task instruction.
+- Extract 3-5 key vocabulary items from the content.
+- Write definitions in simple English (A2-B1 level).
+- Format: <div class="key-words-box"><h3>✎ KEY WORDS — read these before you start</h3><dl>...</dl></div>
 
-TASK_DECOMPOSITION:
-Only apply if the instruction contains multiple sequential steps.
-Break into numbered steps: Step 1, Step 2, Step 3.
-Do NOT change exercise content.
+SIGNALING (if selected and has_signaling is false):
+- Prepend ▶ to the main instruction.
+- Wrap key action verbs in <strong>.
+- Add 💡 TIP: if the task is complex.
 
-MULTIMEDIA:
-Add a shaded image placeholder box with a specific description.
-Only for source_text, discussion, vocabulary, explanation chunks.
-Skip if has_multimedia is already true.
+TASK_DECOMPOSITION (if selected):
+- Only if instruction has multiple sequential steps (read AND answer AND discuss etc.).
+- Break into: Step 1: ... Step 2: ... Step 3: ...
+- Use <ol class="steps"><li>...</li></ol>
 
-=== HTML OUTPUT REQUIREMENTS ===
+MULTIMEDIA (if selected and has_multimedia is false, chunk_type in source_text/discussion/vocabulary/explanation):
+- Add a dashed image placeholder box AFTER the content.
+- Include a specific description of what image would help.
 
-Output a complete, self-contained HTML file with embedded CSS. Requirements:
+=== HTML STRUCTURE ===
 
-DESIGN:
-- Clean, friendly design suitable for printing on A4
-- Amber/warm colour scheme: #D98E2B for headers, #FBF3E6 for backgrounds
-- Green (#1D9E75) for KEY WORDS boxes
-- Blue (#3B6FA8) for task headers
-- Font: system fonts (Arial, sans-serif) — no external fonts needed
-- Page breaks between tasks using CSS
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{worksheet_title}</title>
+<style>
+  /* All CSS embedded here */
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #fff; color: #333; }
+  .task-section { margin-bottom: 40px; page-break-after: always; }
+  .task-header { background: #3B6FA8; color: white; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; }
+  .task-header h2 { margin: 0; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; }
+  .task-header .task-type { font-size: 1.3em; font-weight: bold; margin-top: 4px; }
+  .key-words-box { background: #E8F5F0; border: 2px solid #1D9E75; border-radius: 8px; padding: 15px 20px; margin-bottom: 20px; }
+  .key-words-box h3 { color: #1D9E75; margin: 0 0 10px 0; font-size: 1em; }
+  .key-words-box dl { margin: 0; }
+  .key-words-box dt { font-weight: bold; color: #1D9E75; float: left; margin-right: 8px; }
+  .key-words-box dd { margin-left: 0; margin-bottom: 6px; }
+  .instruction { background: #FBF3E6; border-left: 4px solid #D98E2B; padding: 10px 15px; margin-bottom: 15px; border-radius: 0 6px 6px 0; }
+  .steps { background: #FBF3E6; border-left: 4px solid #D98E2B; padding: 10px 15px 10px 30px; margin-bottom: 15px; border-radius: 0 6px 6px 0; }
+  .steps li { margin-bottom: 6px; }
+  .content-area { margin: 15px 0; line-height: 1.8; }
+  .answer-line { display: flex; align-items: baseline; margin-bottom: 10px; gap: 8px; }
+  .line-num { font-weight: bold; min-width: 25px; color: #555; }
+  .line-blank { flex: 1; border-bottom: 1px solid #333; min-width: 200px; }
+  table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+  th { background: #3B6FA8; color: white; padding: 10px 12px; text-align: left; border: 1px solid #2a5090; }
+  td { padding: 10px 12px; border: 1px solid #ccc; vertical-align: top; }
+  tr:nth-child(even) td { background: #f5f8ff; }
+  .image-placeholder { border: 2px dashed #D98E2B; background: #FBF3E6; padding: 20px; text-align: center; margin: 15px 0; border-radius: 8px; color: #888; font-style: italic; }
+  .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 0.8em; color: #888; text-align: center; }
+  @media print { .task-section { page-break-after: always; } }
+</style>
+</head>
+<body>
+  <h1 style="color:#D98E2B; border-bottom: 2px solid #D98E2B; padding-bottom:10px;">{worksheet_title}</h1>
+  <p style="color:#888; font-size:0.9em;">ADHD-Friendly Adapted Version</p>
+  
+  <!-- One .task-section per chunk -->
+  
+  <div class="footer">Adapted for students with attention differences using ADHD-friendly instructional design principles</div>
+</body>
+</html>
 
-STRUCTURE per task:
-- Task header with progress indicator (TASK 1 / 2, TASK 2 / 2 etc.)
-- KEY WORDS box (green background) if pre_training applied
-- Instruction with ▶ and bold verbs if signaling applied
-- Numbered steps if task_decomposition applied
-- The original content (text, table, numbered lines) — PRESERVE ALL ORIGINAL CONTENT EXACTLY
-- Image placeholder box (dashed border) if multimedia applied
-
-TABLES: If the original content contains a table structure, render it as an actual HTML <table> with proper borders and styling.
-
-NUMBERED LINES: If content has numbered lines (1, 2, 3...), render them as a proper numbered list with answer lines, not as raw numbers.
-
-CONTENT RULES:
-- NEVER change any exercise content — questions, answer options, source texts must be word-for-word identical
-- Only modify: instructions, add KEY WORDS box, add image placeholder
-- Include a footer: "Adapted for students with attention differences using ADHD-friendly instructional design principles"
-
-Output ONLY the HTML — no explanation, no markdown fences, no preamble.\
+Output ONLY the complete HTML — no explanation, no markdown fences, no preamble.\
 """
 
 
-# ================================================================
-# Step 4: 调用Claude API，直接生成HTML
-# ================================================================
 def call_claude_api(chunks: list[dict], selected_strategies: list[str], worksheet_title: str) -> str:
     client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 
-    # 精简chunk内容
     slim_chunks = []
     for c in chunks:
         slim_chunks.append({
-            "chunk_id":            c.get("chunk_id"),
-            "chunk_type":          c.get("chunk_type"),
-            "task_title":          c.get("task_title", ""),
-            "instruction":         c.get("instruction", ""),
-            "content":             c.get("content", ""),
-            "has_pre_training":    c.get("has_pre_training", False),
-            "has_signaling":       c.get("has_signaling", False),
-            "has_multimedia":      c.get("has_multimedia", False),
+            "chunk_id":                  c.get("chunk_id"),
+            "chunk_type":                c.get("chunk_type"),
+            "task_title":                c.get("task_title", ""),
+            "instruction":               c.get("instruction", ""),
+            "content":                   c.get("content", ""),
+            "has_pre_training":          c.get("has_pre_training", False),
+            "has_signaling":             c.get("has_signaling", False),
+            "has_multimedia":            c.get("has_multimedia", False),
             "task_decomposition_needed": c.get("task_decomposition_needed", False),
         })
 
@@ -195,17 +194,19 @@ def call_claude_api(chunks: list[dict], selected_strategies: list[str], workshee
 
     user_prompt = f"""Worksheet title: {worksheet_title}
 Total tasks: {total_tasks}
-Teacher-selected strategies to apply: [{strategies_str}]
+Selected strategies: [{strategies_str}]
 
-Here are the chunks:
+Chunks:
 {json.dumps(slim_chunks, ensure_ascii=False, indent=2)}
 
-Generate the complete ADHD-friendly HTML worksheet now."""
+Generate the complete ADHD-friendly HTML worksheet now. Remember:
+- Tables in content → proper HTML <table>
+- Numbered lines → .answer-line divs with underlines
+- Never change exercise content
+- Output raw HTML only"""
 
     print(f"\n调用Claude API生成HTML...")
-    print(f"  模型: {CLAUDE_MODEL}")
-    print(f"  Chunks数量: {len(chunks)}")
-    print(f"  选择的策略: {selected_strategies}")
+    print(f"  模型: {CLAUDE_MODEL}, Chunks: {len(chunks)}, 策略: {selected_strategies}")
 
     response = client.messages.create(
         model=CLAUDE_MODEL,
@@ -215,27 +216,19 @@ Generate the complete ADHD-friendly HTML worksheet now."""
     )
 
     usage = response.usage
-    print(f"\n  Token用量:")
-    print(f"    Input:  {usage.input_tokens:,} tokens")
-    print(f"    Output: {usage.output_tokens:,} tokens")
     estimated_cost = (usage.input_tokens / 1_000_000 * 3.0) + (usage.output_tokens / 1_000_000 * 15.0)
-    print(f"    预估费用: ${estimated_cost:.4f}")
+    print(f"  Tokens: {usage.input_tokens:,} in / {usage.output_tokens:,} out | 费用: ${estimated_cost:.4f}")
 
     html = response.content[0].text.strip()
-
-    # 清理可能的markdown fence
     if html.startswith("```"):
         html = re.sub(r"^```(?:html)?\s*", "", html)
         html = re.sub(r"\s*```$", "", html)
         html = html.strip()
 
-    print(f"\n✅ Claude返回HTML ({len(html)} 字符)")
+    print(f"✅ Claude返回HTML ({len(html)} 字符)")
     return html
 
 
-# ================================================================
-# 主函数
-# ================================================================
 def run(input_dir: str, selected_strategies: list[str], output_dir: str = None, worksheet_title: str = ""):
     invalid = [s for s in selected_strategies if s not in SELECTABLE_STRATEGIES]
     if invalid:
@@ -257,15 +250,12 @@ def run(input_dir: str, selected_strategies: list[str], output_dir: str = None, 
 
     html = call_claude_api(chunks, selected_strategies, worksheet_title)
 
-    # 保存HTML
     html_path = os.path.join(output_dir, "adapted.html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"HTML已保存: {html_path}")
 
-    # 同时保存一个假的merged列表（main.py兼容性）
     merged = [{"chunk_id": c.get("chunk_id"), "html": True} for c in chunks]
-
     return merged, report
 
 
