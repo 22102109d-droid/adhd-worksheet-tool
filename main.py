@@ -44,12 +44,6 @@ import level1_pipeline
 import level2_claude
 import level3_pdf
 
-# 启动时预加载BERT模型到内存，避免每次请求重新加载导致OOM
-if not os.environ.get("MOCK_LEVEL1", "false").lower() == "true":
-    print("预加载BERT模型...")
-    level1_pipeline.preload_bert_model(BERT_MODEL_DIR)
-    print("BERT模型预加载完成，服务就绪")
-
 STORAGE_DIR = Path("storage")
 STORAGE_DIR.mkdir(exist_ok=True)
 
@@ -267,12 +261,10 @@ async def adapt_worksheet(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Claude adaptation failed: {e}")
 
-    # Level3：直接把HTML复制到输出位置（不转PDF）
-    html_output = work_dir / "adapted.html"
     try:
         level3_pdf.run(
             input_dir=str(adapted_dir),
-            output_path=str(work_dir / "adapted.pdf"),  # level3内部会改成.html
+            output_path=str(work_dir / "adapted.pdf"),
             worksheet_title=meta.get("worksheet_title", "Adapted Worksheet"),
         )
     except Exception as e:
@@ -290,7 +282,6 @@ async def adapt_worksheet(
     }
 
 
-# 下载endpoint：返回HTML文件
 @app.get("/api/download/{worksheet_id}")
 async def download_html(worksheet_id: str):
     work_dir = STORAGE_DIR / worksheet_id
