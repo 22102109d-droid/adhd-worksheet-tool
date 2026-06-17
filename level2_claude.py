@@ -15,7 +15,7 @@ from pathlib import Path
 CLAUDE_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
 CLAUDE_MODEL = "claude-sonnet-4-6"
 
-SELECTABLE_STRATEGIES = ["pre_training", "signaling", "task_decomposition", "multimedia"]
+SELECTABLE_STRATEGIES = ["lesson_structure", "pre_training", "task_decomposition", "segmenting", "multimedia", "signaling"]
 
 
 def load_chunks(input_dir: str) -> list[dict]:
@@ -42,8 +42,20 @@ def generate_strategy_report(chunks: list[dict]) -> dict:
     mm_missing   = [c["chunk_id"] for c in chunks
                     if not c.get("has_multimedia")
                     and c.get("chunk_type") in MULTIMEDIA_SUITABLE_TYPES]
+    seg_missing  = [c["chunk_id"] for c in chunks
+                    if c.get("chunk_type") == "source_text"]
 
     return {
+        "lesson_structure": {
+            "missing_count": 1,
+            "affected_chunks": [],
+            "title": "Lesson Structure (Overview Box)",
+            "why": "Students with ADHD benefit from knowing the full picture before starting. An overview box at the top of the worksheet shows all tasks at a glance, reducing anxiety and helping students plan their effort (Sweller's Cognitive Load Theory).",
+            "example": {
+                "before": "Worksheet starts directly with Task 1.",
+                "after": "A 📋 WHAT YOU WILL DO TODAY box appears first, listing each task with a one-line description."
+            }
+        },
         "pre_training": {
             "missing_count": len(pre_missing),
             "affected_chunks": pre_missing,
@@ -52,16 +64,6 @@ def generate_strategy_report(chunks: list[dict]) -> dict:
             "example": {
                 "before": "Task starts directly with: \"Read the interview and answer the questions.\"",
                 "after": "A green 'KEY WORDS' box appears first:\n  buttered — grew up completely in one place\n  dairy — a small shop selling milk\nThen the task starts as normal."
-            }
-        },
-        "signaling": {
-            "missing_count": len(sig_missing),
-            "affected_chunks": sig_missing,
-            "title": "Signaling (Visual Cues)",
-            "why": "Plain instruction text gives no visual anchor for where to focus. Adding bold action verbs and a clear marker (▶) helps students immediately locate 'what to do', reducing the time spent re-reading instructions (Mayer's Signaling Principle).",
-            "example": {
-                "before": "Read the statements. Circle YES or NO.",
-                "after": "▶ Circle YES or NO for each statement."
             }
         },
         "task_decomposition": {
@@ -74,6 +76,16 @@ def generate_strategy_report(chunks: list[dict]) -> dict:
                 "after": "Step 1: Read the interview again.\nStep 2: Answer the questions below.\nStep 3: Discuss your answers with a partner."
             }
         },
+        "segmenting": {
+            "missing_count": len(seg_missing),
+            "affected_chunks": seg_missing,
+            "title": "Segmenting (Visual Breaks in Reading Text)",
+            "why": "Long unbroken reading passages overwhelm working memory. Breaking the source text into smaller visual chunks with clear spacing lets students process one section at a time (Mayer's Segmenting Principle).",
+            "example": {
+                "before": "A long reading passage presented as one continuous block of text.",
+                "after": "The same passage divided into clearly spaced sections of 2-3 sentences each, making it easier to track progress."
+            }
+        },
         "multimedia": {
             "missing_count": len(mm_missing),
             "affected_chunks": mm_missing,
@@ -82,6 +94,16 @@ def generate_strategy_report(chunks: list[dict]) -> dict:
             "example": {
                 "before": "Text-only discussion prompt.",
                 "after": "Same text, with an added image placeholder."
+            }
+        },
+        "signaling": {
+            "missing_count": len(sig_missing),
+            "affected_chunks": sig_missing,
+            "title": "Signaling (Visual Cues)",
+            "why": "Plain instruction text gives no visual anchor for where to focus. Adding bold action verbs and a clear marker (▶) helps students immediately locate 'what to do', reducing the time spent re-reading instructions (Mayer's Signaling Principle).",
+            "example": {
+                "before": "Read the statements. Circle YES or NO.",
+                "after": "▶ Circle YES or NO for each statement."
             }
         }
     }
@@ -102,6 +124,12 @@ You will receive worksheet chunks and must output a SINGLE complete, self-contai
 
 === STRATEGIES TO APPLY ===
 
+LESSON_STRUCTURE (if selected):
+- Add an overview box at the very TOP of the HTML body, before all task sections.
+- List every task with its number, title, and a one-line description of what students will do.
+- Format: <div class="overview-box"><h2>📋 What you will do today</h2><ol>...</ol></div>
+- Base the descriptions on task_title and chunk_type from the chunks.
+
 PRE_TRAINING (if selected and has_pre_training is false):
 - Add a green KEY WORDS box BEFORE the task instruction.
 - Extract 3-5 key vocabulary items from the content.
@@ -117,6 +145,12 @@ TASK_DECOMPOSITION (if selected):
 - Only if instruction has multiple sequential steps (read AND answer AND discuss etc.).
 - Break into: Step 1: ... Step 2: ... Step 3: ...
 - Use <ol class="steps"><li>...</li></ol>
+
+SEGMENTING (if selected, ONLY for chunk_type === "source_text"):
+- Split the source text into visual sections of 2-3 sentences each.
+- Wrap each section in <div class="segment">...</div>
+- Do NOT change any words. Only add visual spacing between sections.
+- Do NOT apply to exercise items, tables, question lists, or any other chunk type.
 
 MULTIMEDIA (if selected and has_multimedia is false, chunk_type in source_text/discussion/vocabulary/explanation):
 - Add a dashed image placeholder box AFTER the content.
@@ -153,7 +187,12 @@ MULTIMEDIA (if selected and has_multimedia is false, chunk_type in source_text/d
   th { background: #3B6FA8; color: white; padding: 10px 12px; text-align: left; border: 1px solid #2a5090; }
   td { padding: 10px 12px; border: 1px solid #ccc; vertical-align: top; }
   tr:nth-child(even) td { background: #f5f8ff; }
-  .image-placeholder { border: 2px dashed #D98E2B; background: #FBF3E6; padding: 20px; text-align: center; margin: 15px 0; border-radius: 8px; color: #888; font-style: italic; }
+  .overview-box { background: #EEF4FB; border: 2px solid #3B6FA8; border-radius: 8px; padding: 16px 20px; margin-bottom: 30px; }
+  .overview-box h2 { color: #3B6FA8; margin: 0 0 10px 0; font-size: 1em; }
+  .overview-box ol { margin: 0; padding-left: 1.2rem; }
+  .overview-box li { margin-bottom: 5px; font-size: 14px; color: #333; }
+  .segment { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed #ddd; }
+  .segment:last-child { border-bottom: none; }
   .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 0.8em; color: #888; text-align: center; }
   @media print { .task-section { page-break-after: always; } }
 </style>
