@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#FAF8F3;--cream-dark:#F5F0E6;--ink:#1A1814;--ink-muted:#6B6760;--ink-faint:#B8B5B0;
+  --amber:#854F0B;--amber-light:#FAEEDA;--amber-mid:#EF9F27;--amber-bright:#FAC775;
+  --green:#1D9E75;--green-light:#E1F5EE;
+  --blue:#185FA5;--blue-light:#E6F1FB;
+  --coral:#D85A30;--coral-light:#FAECE7;
+  --border:rgba(26,24,20,0.12);--radius:12px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--ink);padding:3rem 5% 5rem;}
+.tool-wrap{max-width:760px;margin:0 auto;}
+
+.steps-nav{display:flex;align-items:center;margin-bottom:3rem;}
+.step-dot{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-faint);font-weight:500;white-space:nowrap;}
+.step-dot.active{color:var(--amber);}
+.step-dot.done{color:var(--ink-muted);}
+.dot{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--ink-faint);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0;}
+.step-dot.active .dot{border-color:var(--amber);background:var(--amber);color:#fff;}
+.step-dot.done .dot{border-color:var(--ink-muted);background:var(--ink-muted);color:#fff;}
+.step-line{flex:1;height:1px;background:var(--border);margin:0 12px;}
+
+.panel{display:none;}
+.panel.active{display:block;}
+
+.panel-title{font-family:'Instrument Serif',serif;font-size:2rem;color:var(--ink);margin-bottom:.4rem;line-height:1.2;}
+.panel-sub{font-size:15px;color:var(--ink-muted);margin-bottom:2rem;line-height:1.6;}
+
+.upload-zone{border:1.5px dashed var(--ink-faint);border-radius:var(--radius);padding:2.5rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:transparent;}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--amber);background:var(--amber-light);}
+.upload-icon{font-size:2.2rem;color:var(--ink-faint);margin-bottom:.75rem;}
+.upload-zone.has-file .upload-icon{color:var(--green);}
+.upload-label{font-size:15px;color:var(--ink-muted);}
+.upload-label strong{color:var(--amber);cursor:pointer;}
+.upload-label strong:hover{text-decoration:underline;}
+.file-name{font-size:13px;color:var(--ink-muted);margin-top:.4rem;}
+.upload-hint{font-size:12px;color:var(--ink-faint);margin-top:.4rem;}
+input[type=file]{display:none;}
+
+.form-row{margin-top:1.5rem;}
+.form-label{font-size:13px;font-weight:500;color:var(--ink-muted);margin-bottom:.4rem;display:block;}
+.form-input{width:100%;padding:.65rem .9rem;font-family:'DM Sans',sans-serif;font-size:15px;border:1px solid var(--border);border-radius:8px;background:white;color:var(--ink);outline:none;transition:border-color .2s;}
+.form-input:focus{border-color:var(--amber);}
+
+.toggle-row{display:flex;align-items:center;gap:12px;margin-top:1.25rem;}
+.toggle-label{font-size:14px;color:var(--ink-muted);}
+.toggle{position:relative;width:42px;height:24px;cursor:pointer;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-track{position:absolute;inset:0;background:var(--ink-faint);border-radius:99px;transition:background .2s;}
+.toggle input:checked+.toggle-track{background:var(--amber);}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:white;border-radius:50%;transition:transform .2s;pointer-events:none;}
+.toggle input:checked~.toggle-thumb{transform:translateX(18px);}
+
+.notice-box{border-radius:8px;padding:1rem 1.2rem;margin-top:1.5rem;font-size:13px;line-height:1.7;}
+.notice-amber{background:var(--amber-light);border:1px solid var(--amber-bright);color:var(--amber);}
+.notice-coral{background:var(--coral-light);border:1px solid #f0b09a;color:#7a2e12;}
+
+.notice-box ul{margin-top:.4rem;padding-left:1.1rem;}
+.notice-box li{margin-bottom:.25rem;}
+.notice-box b{font-weight:500;}
+
+.consent-row{display:flex;align-items:flex-start;gap:10px;margin-top:1.25rem;padding:1rem 1.2rem;background:var(--cream-dark);border-radius:8px;border:1px solid var(--border);}
+.consent-check{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--ink-faint);flex-shrink:0;margin-top:1px;cursor:pointer;accent-color:var(--amber);}
+.consent-label{font-size:13px;color:var(--ink-muted);line-height:1.55;cursor:pointer;}
+.consent-label b{color:var(--ink);font-weight:500;}
+
+.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:.75rem 1.75rem;background:var(--amber);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;cursor:pointer;transition:background .2s;margin-top:1.75rem;}
+.btn-primary:hover{background:#6d4009;}
+.btn-primary:disabled{background:var(--ink-faint);cursor:not-allowed;}
+
+.loading-wrap{text-align:center;padding:4rem 0;}
+.spinner{width:40px;height:40px;border:3px solid var(--amber-light);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1.25rem;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-title{font-family:'Instrument Serif',serif;font-size:1.5rem;margin-bottom:.4rem;}
+.loading-sub{font-size:14px;color:var(--ink-muted);}
+
+.strategies-grid{display:grid;gap:1rem;margin-bottom:2rem;}
+.strat-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.4rem;cursor:pointer;transition:border-color .2s,background .2s;user-select:none;}
+.strat-card.selected{border-color:var(--amber);background:var(--amber-light);}
+.strat-card.not-needed{opacity:.5;cursor:default;pointer-events:none;}
+.strat-top{display:flex;align-items:flex-start;gap:12px;}
+.strat-check{width:22px;height:22px;border-radius:5px;border:1.5px solid var(--ink-faint);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:background .2s,border-color .2s;}
+.strat-card.selected .strat-check{background:var(--amber);border-color:var(--amber);}
+.strat-check svg{display:none;}
+.strat-card.selected .strat-check svg{display:block;}
+.strat-body{flex:1;}
+.strat-name{font-weight:500;font-size:15px;color:var(--ink);margin-bottom:.3rem;}
+.strat-badge{display:inline-block;font-size:11px;font-weight:500;padding:2px 9px;border-radius:99px;margin-bottom:.5rem;}
+.badge-recommended{background:var(--green-light);color:#0f6e56;}
+.badge-present{background:var(--cream-dark);color:var(--ink-muted);}
+.strat-why{font-size:13px;color:var(--ink-muted);line-height:1.55;}
+.strat-example{margin-top:.75rem;background:white;border-radius:8px;padding:.75rem 1rem;font-size:13px;line-height:1.5;border:1px solid var(--border);display:none;}
+.strat-card.selected .strat-example{display:block;}
+.example-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
+.example-before{color:var(--coral);margin-bottom:.5rem;}
+.example-after{color:var(--green);}
+.example-divider{border:none;border-top:1px solid var(--border);margin:.5rem 0;}
+
+.success-icon{width:56px;height:56px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem;}
+.btn-download{display:inline-flex;align-items:center;gap:8px;padding:.75rem 1.75rem;background:var(--green);color:white;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;cursor:pointer;transition:background .2s;text-decoration:none;}
+.btn-download:hover{background:#0f6e56;}
+.btn-secondary{display:inline-flex;align-items:center;gap:8px;padding:.7rem 1.5rem;background:transparent;color:var(--ink-muted);border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;transition:background .2s;margin-top:1rem;}
+.btn-secondary:hover{background:var(--cream-dark);}
+
+.error-box{background:var(--coral-light);border:1px solid #f0b09a;border-radius:8px;padding:.9rem 1.1rem;font-size:14px;color:#7a2e12;margin-top:1rem;}
+.quota-wall{text-align:center;padding:3rem 1rem;}
+.quota-wall .quota-icon{font-size:2.5rem;margin-bottom:1rem;}
+.quota-wall h2{font-family:'Instrument Serif',serif;font-size:1.6rem;margin-bottom:.5rem;}
+.quota-wall p{font-size:14px;color:var(--ink-muted);line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="tool-wrap">
+
+  <nav class="steps-nav" aria-label="Progress">
+    <div class="step-dot active" id="nav1"><div class="dot">1</div>Upload</div>
+    <div class="step-line"></div>
+    <div class="step-dot" id="nav2"><div class="dot">2</div>Review &amp; select</div>
+    <div class="step-line"></div>
+    <div class="step-dot" id="nav3"><div class="dot">3</div>Download</div>
+  </nav>
+
+  <!-- STEP 1: upload -->
+  <section class="panel active" id="panel1">
+    <h1 class="panel-title">Upload your worksheet</h1>
+    <p class="panel-sub">We'll analyse it and suggest ADHD-friendly improvements in about 30–60 seconds.</p>
+
+    <div class="upload-zone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon" id="uploadIcon">📄</div>
+      <p class="upload-label">Drag &amp; drop your PDF here, or <strong onclick="event.stopPropagation()">browse</strong></p>
+      <p class="file-name" id="fileName">No file selected</p>
+      <p class="upload-hint">PDF only · Max 3 pages</p>
+      <input type="file" id="fileInput" accept=".pdf">
+    </div>
+
+    <div class="form-row">
+      <label class="form-label" for="emailInput">Your email address</label>
+      <input class="form-input" type="email" id="emailInput" placeholder="teacher@school.edu">
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle">
+        <input type="checkbox" id="twoColToggle">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+      <span class="toggle-label">This worksheet has two columns of text</span>
+    </div>
+
+    <div class="notice-box notice-amber" style="margin-top:1.5rem;">
+      <b>Before you upload, please check:</b>
+      <ul>
+        <li><b>Student-facing materials only.</b> Upload worksheets intended to be given directly to students as practice activities.</li>
+        <li><b>No syllabi or lesson plans.</b> Teacher-facing documents are not suitable for this tool.</li>
+        <li><b>No personal or private information.</b> Do not upload anything containing student names, grades, or any sensitive data.</li>
+        <li><b>Listening exercises are not supported.</b> The tool will process audio-based tasks but adaptation may not be meaningful.</li>
+        <li><b>Unusual formatting may not render optimally.</b> Worksheets with numbered annotation lines or complex layouts may produce imperfect results.</li>
+      </ul>
+    </div>
+
+    <div class="consent-row">
+      <input type="checkbox" class="consent-check" id="consentCheck">
+      <label class="consent-label" for="consentCheck">
+        I confirm that this worksheet <b>does not contain any personal or private information</b> about students or staff, and that it is a <b>student-facing practice activity</b> suitable for direct classroom use.
+      </label>
+    </div>
+
+    <button class="btn-primary" id="uploadBtn" disabled onclick="handleUpload()">
+      Analyse worksheet →
+    </button>
+    <div class="error-box" id="uploadError" style="display:none"></div>
+  </section>
+
+  <!-- Loading 1 -->
+  <section class="panel" id="panelLoading">
+    <div class="loading-wrap">
+      <div class="spinner"></div>
+      <p class="loading-title">Analysing your worksheet…</p>
+      <p class="loading-sub">This takes about 30–60 seconds. Please don't close this tab.</p>
+    </div>
+  </section>
+
+  <!-- STEP 2: review -->
+  <section class="panel" id="panel2">
+    <h1 class="panel-title">Choose your enhancements</h1>
+    <p class="panel-sub">Select the strategies you'd like applied. Recommended ones are pre-selected based on what we found in your worksheet.</p>
+    <div class="strategies-grid" id="stratGrid"></div>
+    <button class="btn-primary" id="adaptBtn" onclick="handleAdapt()">Generate adapted worksheet →</button>
+    <div class="error-box" id="adaptError" style="display:none"></div>
+  </section>
+
+  <!-- Loading 2 -->
+  <section class="panel" id="panelLoading2">
+    <div class="loading-wrap">
+      <div class="spinner"></div>
+      <p class="loading-title">Generating your adapted worksheet…</p>
+      <p class="loading-sub">Applying the selected strategies. This takes around 20–40 seconds.</p>
+    </div>
+  </section>
+
+  <!-- STEP 3: download -->
+  <section class="panel" id="panel3">
+    <div class="success-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <h1 class="panel-title">Your worksheet is ready</h1>
+    <p class="panel-sub">Open the file in any browser, then use <b>File → Print</b> (or Cmd+P / Ctrl+P) to save as PDF or print directly.</p>
+    <a class="btn-download" id="downloadLink" href="#" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      Download adapted worksheet
+    </a>
+    <br>
+    <button class="btn-secondary" onclick="resetTool()">← Adapt another worksheet</button>
+  </section>
+
+  <!-- Quota exceeded -->
+  <section class="panel" id="panelQuota">
+    <div class="quota-wall">
+      <div class="quota-icon">🙏</div>
+      <h2>Thank you for trying the Smart Material Enhancer</h2>
+      <p>We're currently in a testing phase and each account is limited to <b>2 adaptations</b>. You've reached your limit for this email address.<br><br>If you'd like to continue using the tool or share feedback, please contact us at <b>adhd.efl.tool@polyu.edu.hk</b>.</p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const API = 'https://adhd-worksheet-tool-production.up.railway.app';
+const MAX_USES = 2;
+let worksheetId = null;
+
+const STRATEGIES = {
+  lesson_structure: {
+    name: 'Lesson Structure (Overview Box)',
+    why: 'Students with ADHD benefit from knowing the full picture before starting. An overview box at the top lists all tasks at a glance, reducing anxiety and helping students plan their effort (Sweller\'s Cognitive Load Theory).',
+    before: 'Worksheet starts directly with Task 1, with no indication of what comes next.',
+    after: 'A 📋 WHAT YOU WILL DO TODAY box appears first, listing each task with a one-line description.'
+  },
+  pre_training: {
+    name: 'Pre-training (Key Words Box)',
+    why: 'Students with ADHD often get stuck on unfamiliar vocabulary mid-task, breaking their focus. Pre-teaching 3–5 key words before the activity reduces this cognitive interruption (Mayer\'s Pre-training Principle).',
+    before: 'Task starts directly: "Read the interview and answer the questions."',
+    after: 'A green KEY WORDS box appears first with simple definitions, then the task begins as normal.'
+  },
+  signaling: {
+    name: 'Signaling (Visual Cues)',
+    why: 'Plain instruction text gives no visual anchor. Adding a ▶ marker and bold action verbs helps students immediately locate what to do, reducing the need to re-read instructions (Mayer\'s Signaling Principle).',
+    before: 'Read the statements. Circle YES or NO.',
+    after: '▶ Circle YES or NO for each statement.'
+  },
+  task_decomposition: {
+    name: 'Task Decomposition (Step-by-Step)',
+    why: 'Instructions with multiple sequential actions overload working memory. Students with ADHD may lose track of later steps. Numbered steps let students complete one action at a time (Sweller\'s Cognitive Load Theory).',
+    before: 'Read the interview again, then answer the questions, and discuss with a partner.',
+    after: 'Step 1: Read the interview again.\nStep 2: Answer the questions below.\nStep 3: Discuss your answers with a partner.'
+  },
+  segmenting: {
+    name: 'Segmenting (Visual Breaks in Reading Text)',
+    why: 'Long unbroken reading passages overwhelm working memory. Breaking source text into smaller visual chunks with clear spacing lets students process one section at a time (Mayer\'s Segmenting Principle).',
+    before: 'A long reading passage presented as one continuous block of text.',
+    after: 'The same passage divided into clearly spaced sections of 2–3 sentences each, making it easier to track progress.'
+  },
+  multimedia: {
+    name: 'Multimedia (Supporting Images)',
+    why: 'Pairing text with a relevant image reduces verbal working memory load by engaging both visual and verbal channels simultaneously (Mayer\'s Multimedia Principle).',
+    before: 'Text-only discussion prompt about locations in London.',
+    after: 'Same prompt, with a suggested image placeholder added alongside the text.'
+  }
+};
+
+function getUsageKey(email) {
+  return 'sme_uses_' + email.trim().toLowerCase();
+}
+
+function getUsageCount(email) {
+  return parseInt(localStorage.getItem(getUsageKey(email)) || '0', 10);
+}
+
+function incrementUsage(email) {
+  const key = getUsageKey(email);
+  const count = getUsageCount(email) + 1;
+  localStorage.setItem(key, count);
+  return count;
+}
+
+function checkUploadReady() {
+  const hasFile = document.getElementById('fileInput').files.length > 0;
+  const hasEmail = document.getElementById('emailInput').value.includes('@');
+  const hasConsent = document.getElementById('consentCheck').checked;
+  document.getElementById('uploadBtn').disabled = !(hasFile && hasEmail && hasConsent);
+}
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) {
+    if (f.type !== 'application/pdf') {
+      showError('uploadError', 'Please upload a PDF file only.');
+      document.getElementById('fileInput').value = '';
+      return;
+    }
+    document.getElementById('fileName').textContent = f.name;
+    document.getElementById('uploadIcon').textContent = '✅';
+    document.getElementById('dropzone').classList.add('has-file');
+  }
+  checkUploadReady();
+});
+
+document.getElementById('emailInput').addEventListener('input', checkUploadReady);
+document.getElementById('consentCheck').addEventListener('change', checkUploadReady);
+
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  if (f.type !== 'application/pdf') {
+    showError('uploadError', 'Please upload a PDF file only.');
+    return;
+  }
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  document.getElementById('fileInput').files = dt.files;
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('uploadIcon').textContent = '✅';
+  dz.classList.add('has-file');
+  checkUploadReady();
+});
+
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function setNav(step) {
+  ['nav1','nav2','nav3'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.remove('active','done');
+    if (i + 1 < step) el.classList.add('done');
+    else if (i + 1 === step) el.classList.add('active');
+  });
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+async function handleUpload() {
+  // upload立刻返回worksheet_id，然后轮询status
+  const email = document.getElementById('emailInput').value.trim();
+  document.getElementById('uploadError').style.display = 'none';
+
+  if (getUsageCount(email) >= MAX_USES) {
+    showPanel('panelQuota');
+    return;
+  }
+
+  const file = document.getElementById('fileInput').files[0];
+  const twoCol = document.getElementById('twoColToggle').checked;
+
+  showPanel('panelLoading');
+  setNav(1);
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('email', email);
+  fd.append('has_two_columns', twoCol);
+
+  try {
+    const res = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed. Please try again.');
+    worksheetId = data.worksheet_id;
+    // 开始轮询status
+    await pollStatus(worksheetId);
+  } catch(e) {
+    showPanel('panel1');
+    setNav(1);
+    showError('uploadError', e.message);
+  }
+}
+
+async function pollStatus(wsId) {
+  const maxAttempts = 60; // 最多等5分钟（60次 x 5秒）
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, 5000)); // 等5秒
+    try {
+      const res = await fetch(`${API}/api/status/${wsId}`);
+      const data = await res.json();
+      if (data.status === 'ready') {
+        buildStrategyCards(data.strategy_report);
+        showPanel('panel2');
+        setNav(2);
+        return;
+      } else if (data.status === 'error') {
+        throw new Error(data.error || 'Processing failed.');
+      }
+      // status === 'processing'，继续等待
+    } catch(e) {
+      if (e.message && e.message !== 'Failed to fetch') {
+        showPanel('panel1');
+        setNav(1);
+        showError('uploadError', e.message);
+        return;
+      }
+    }
+  }
+  showPanel('panel1');
+  setNav(1);
+  showError('uploadError', 'Processing timed out. Please try again.');
+}
+
+function buildStrategyCards(report) {
+  const grid = document.getElementById('stratGrid');
+  grid.innerHTML = '';
+  Object.entries(STRATEGIES).forEach(([key, info]) => {
+    const r = report[key];
+    const recommended = r && (r.missing_count === null || r.missing_count > 0);
+    const card = document.createElement('div');
+    card.className = 'strat-card' + (recommended ? ' selected' : ' not-needed');
+    card.dataset.key = key;
+    if (recommended) card.addEventListener('click', () => card.classList.toggle('selected'));
+    card.innerHTML = `
+      <div class="strat-top">
+        <div class="strat-check">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <div class="strat-body">
+          <p class="strat-name">${info.name}</p>
+          <span class="strat-badge ${recommended ? 'badge-recommended' : 'badge-present'}">${recommended ? 'Recommended for this worksheet' : 'Already present'}</span>
+          <p class="strat-why">${info.why}</p>
+          <div class="strat-example">
+            <div class="example-before"><div class="example-label">Before</div>${info.before}</div>
+            <hr class="example-divider">
+            <div class="example-after"><div class="example-label">After</div>${info.after.replace(/\n/g,'<br>')}</div>
+          </div>
+        </div>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+async function handleAdapt() {
+  const email = document.getElementById('emailInput').value.trim();
+  const selected = [...document.querySelectorAll('.strat-card.selected')].map(c => c.dataset.key);
+  document.getElementById('adaptError').style.display = 'none';
+
+  if (selected.length === 0) {
+    showError('adaptError', 'Please select at least one strategy before generating.');
+    return;
+  }
+
+  showPanel('panelLoading2');
+  setNav(2);
+
+  const fd = new FormData();
+  fd.append('worksheet_id', worksheetId);
+  fd.append('strategies', JSON.stringify(selected));
+
+  try {
+    const res = await fetch(`${API}/api/adapt`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Generation failed. Please try again.');
+
+    incrementUsage(email);
+    const dl = document.getElementById('downloadLink');
+    dl.href = API + data.download_url;
+    dl.download = 'adapted_worksheet.html';
+    showPanel('panel3');
+    setNav(3);
+  } catch(e) {
+    showPanel('panel2');
+    setNav(2);
+    showError('adaptError', e.message);
+  }
+}
+
+function resetTool() {
+  worksheetId = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileName').textContent = 'No file selected';
+  document.getElementById('uploadIcon').textContent = '📄';
+  document.getElementById('emailInput').value = '';
+  document.getElementById('twoColToggle').checked = false;
+  document.getElementById('consentCheck').checked = false;
+  document.getElementById('dropzone').classList.remove('has-file');
+  document.getElementById('uploadBtn').disabled = true;
+  document.getElementById('uploadError').style.display = 'none';
+  showPanel('panel1');
+  setNav(1);
+}
+</script>
+</body>
+</html>
