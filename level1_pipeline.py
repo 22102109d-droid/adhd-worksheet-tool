@@ -336,6 +336,7 @@ def process_pdf_single_column(
     """
     from volcenginesdkarkruntime import Ark
     import torch
+    torch.set_num_threads(1)
 
     client = Ark(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
 
