@@ -36,7 +36,7 @@ if not os.path.exists(f"{BERT_MODEL_DIR}/best_model.pt"):
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 import fitz
 
 import level1_pipeline
@@ -341,6 +341,10 @@ async def download_html(worksheet_id: str):
 async def health():
     return {"status": "ok"}
 
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    index_path = Path(__file__).parent / "index.html"
+    return HTMLResponse(content=index_path.read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     import uvicorn
