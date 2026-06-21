@@ -5,6 +5,8 @@ FastAPI后端，整合三层pipeline，供Webflow前端调用。
 """
 
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 import uuid
 import shutil
 import json
