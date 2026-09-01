@@ -21,7 +21,6 @@ import json
 import os
 import re
 import sys
-import time
 from pathlib import Path
 
 import fitz
@@ -336,7 +335,6 @@ def process_pdf_single_column(
     """
     from volcenginesdkarkruntime import Ark
     import torch
-    torch.set_num_threads(1)
 
     client = Ark(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
 
@@ -375,12 +373,9 @@ def process_pdf_single_column(
     text_lines = [l for l in all_lines if not l.get("is_image", False) and l["text"]]
     print(f"共{len(text_lines)}行（不含图片行）")
 
-    bert_start = time.time()
     results = []
     with torch.no_grad():
         for i, line in enumerate(text_lines):
-            if i % 10 == 0:
-                print(f"  BERT推理: {i}/{len(text_lines)}...", flush=True)
             text = build_context_text(text_lines, i, window=context_window)
             extra = extract_extra_features(line)
             encoding = bert_tokenizer(
@@ -395,8 +390,6 @@ def process_pdf_single_column(
             pred_class = probs.argmax().item()
             label = ["I", "B", "J"][pred_class]
             results.append({"rich": line["rich"], "label": label, "page": line["page"]})
-    bert_elapsed = time.time() - bert_start
-    print(f"BERT推理完成，耗时{bert_elapsed:.1f}秒", flush=True)
 
     img_lines = [l for l in all_lines if l.get("is_image", False)]
     img_by_page = {}
@@ -429,19 +422,16 @@ def process_pdf_single_column(
     if current:
         sections.append(current)
 
-    print(f"BERT切出{len(sections)}个chunk", flush=True)
+    print(f"BERT切出{len(sections)}个chunk")
 
     # --- Step 3: 豆包打标签 ---
-    print("\n豆包标注chunk类型...", flush=True)
+    print("\n豆包标注chunk类型...")
     chunks = []
     for i, section in enumerate(sections):
         chunk_content = "\n".join(section["rich_lines"])
-        print(f"  开始调用豆包API chunk {i+1}/{len(sections)}...", flush=True)
+        print(f"  标注chunk {i+1}/{len(sections)}...")
 
-        doubao_start = time.time()
         labels = label_chunk_with_doubao(client, model_endpoint, chunk_content, image_list)
-        doubao_elapsed = time.time() - doubao_start
-        print(f"  豆包API chunk {i+1} 返回成功，耗时{doubao_elapsed:.1f}秒", flush=True)
 
         chunk = {
             "chunk_id": i + 1,
@@ -461,12 +451,11 @@ def process_pdf_single_column(
         }
         chunks.append(chunk)
 
-    print(f"豆包标注完成，共{len(chunks)}个chunk", flush=True)
+    print(f"豆包标注完成，共{len(chunks)}个chunk")
 
     # --- Step 4: signaling/multimedia检测 ---
-    print("\n检测 Signaling 和 Multimedia...", flush=True)
+    print("\n检测 Signaling 和 Multimedia...")
     chunks = annotate_signaling_multimedia(chunks)
-    print("Signaling/Multimedia检测完成", flush=True)
 
     return chunks
 
@@ -557,12 +546,8 @@ def process_pdf_two_column(
     print("注意: 双栏布局下行顺序可能交错，已整页交给豆包重新组织")
 
     # --- Step 2: 豆包一次性分chunk+打标签 ---
-    print("\n豆包分chunk + 标注 (双栏模式)...", flush=True)
-    print("  开始调用豆包API (双栏全页模式)...", flush=True)
-    doubao_start = time.time()
+    print("\n豆包分chunk + 标注 (双栏模式)...")
     raw_chunks = label_full_page_with_doubao(client, model_endpoint, pdf_text, image_list)
-    doubao_elapsed = time.time() - doubao_start
-    print(f"  豆包API返回成功，耗时{doubao_elapsed:.1f}秒", flush=True)
 
     chunks = []
     for i, labels in enumerate(raw_chunks):
@@ -584,12 +569,11 @@ def process_pdf_two_column(
         }
         chunks.append(chunk)
 
-    print(f"豆包分chunk完成，共{len(chunks)}个chunk", flush=True)
+    print(f"豆包分chunk完成，共{len(chunks)}个chunk")
 
     # --- Step 3: signaling/multimedia检测 ---
-    print("\n检测 Signaling 和 Multimedia...", flush=True)
+    print("\n检测 Signaling 和 Multimedia...")
     chunks = annotate_signaling_multimedia(chunks)
-    print("Signaling/Multimedia检测完成", flush=True)
 
     return chunks
 
