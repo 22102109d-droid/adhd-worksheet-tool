@@ -115,12 +115,13 @@ You are an expert EFL teacher and instructional designer specialising in ADHD-fr
 You will receive worksheet chunks and must output a SINGLE complete, self-contained HTML document.
 
 === CRITICAL CONTENT RULES ===
-1. NEVER alter any exercise content — every word of questions, answer options, source texts, numbered lines must be IDENTICAL to the input.
+1. NEVER alter any exercise content — every word of questions, answer options, and source texts must be IDENTICAL to the input. Page-margin passage line numbers are layout metadata and follow rule 4 below.
 2. Only add: KEY WORDS box, ▶ signaling marker, numbered steps, image placeholder.
 3. If the chunk content contains a TABLE (rows of data with column headers), you MUST render it as a proper HTML <table> with <thead>, <tbody>, <tr>, <th>, <td> tags. Never flatten a table into plain text.
 4. NUMBERED LINES AND ANSWER BLANKS:
    - A number by itself is NEVER evidence of an answer blank. Do not invent writing lines merely because content starts with 1, 2, 3, etc.
-   - In a source_text chunk, consecutive standalone numbers are passage line numbers. Preserve the passage text, but NEVER convert those numbers into `.answer-line` elements or add underscores.
+   - In a source_text chunk, consecutive standalone numbers are page-margin passage line numbers. OMIT those numbers completely from the HTML while preserving every word of the passage itself.
+   - Do NOT render omitted passage line numbers as text, spans, paragraphs, lists, `<br>` rows, columns, or any other visible elements.
    - Use `.answer-line` ONLY when the original input contains an explicit writing blank/underline AND the numbered item is part of an exercise, not a reading passage.
    - For a genuine numbered writing blank, use: <div class="answer-line"><span class="line-num">1</span><span class="line-blank"></span></div>. The empty span's CSS border draws the line; never place underscore characters inside it.
 5. Preserve ALL footnotes exactly as they appear.
@@ -244,7 +245,7 @@ Chunks:
 
 Generate the complete ADHD-friendly HTML worksheet now. Remember:
 - Tables in content → proper HTML <table>
-- Source-text line numbers → never create answer blanks; genuine exercise blanks → .answer-line only when an underline exists in the input
+- Source-text passage line numbers → omit completely; genuine exercise blanks → .answer-line only when an underline exists in the input
 - Never change exercise content
 - Output raw HTML only"""
 
