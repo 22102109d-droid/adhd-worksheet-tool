@@ -118,7 +118,11 @@ You will receive worksheet chunks and must output a SINGLE complete, self-contai
 1. NEVER alter any exercise content — every word of questions, answer options, source texts, numbered lines must be IDENTICAL to the input.
 2. Only add: KEY WORDS box, ▶ signaling marker, numbered steps, image placeholder.
 3. If the chunk content contains a TABLE (rows of data with column headers), you MUST render it as a proper HTML <table> with <thead>, <tbody>, <tr>, <th>, <td> tags. Never flatten a table into plain text.
-4. If the chunk content has NUMBERED LINES (lines starting with 1, 2, 3...), render each as a div with the number and a long underline for writing, like: <div class="answer-line"><span class="line-num">1</span><span class="line-blank">____________________________</span></div>
+4. NUMBERED LINES AND ANSWER BLANKS:
+   - A number by itself is NEVER evidence of an answer blank. Do not invent writing lines merely because content starts with 1, 2, 3, etc.
+   - In a source_text chunk, consecutive standalone numbers are passage line numbers. Preserve the passage text, but NEVER convert those numbers into `.answer-line` elements or add underscores.
+   - Use `.answer-line` ONLY when the original input contains an explicit writing blank/underline AND the numbered item is part of an exercise, not a reading passage.
+   - For a genuine numbered writing blank, use: <div class="answer-line"><span class="line-num">1</span><span class="line-blank"></span></div>. The empty span's CSS border draws the line; never place underscore characters inside it.
 5. Preserve ALL footnotes exactly as they appear.
 6. Use UTF-8 characters correctly — ▶ ✎ 💡 must render properly.
 
@@ -240,7 +244,7 @@ Chunks:
 
 Generate the complete ADHD-friendly HTML worksheet now. Remember:
 - Tables in content → proper HTML <table>
-- Numbered lines → .answer-line divs with underlines
+- Source-text line numbers → never create answer blanks; genuine exercise blanks → .answer-line only when an underline exists in the input
 - Never change exercise content
 - Output raw HTML only"""
 
