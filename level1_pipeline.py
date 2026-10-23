@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import fitz
@@ -336,6 +337,11 @@ def process_pdf_single_column(
     from volcenginesdkarkruntime import Ark
     import torch
 
+    # Keep CPU parallelism bounded on shared Railway hosts; configurable for tuning.
+    num_threads = max(1, int(os.environ.get("BERT_NUM_THREADS", "2")))
+    torch.set_num_threads(num_threads)
+    print(f"BERT CPU threads={torch.get_num_threads()}", flush=True)
+
     client = Ark(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
 
     # --- Step 1: fitz提取 ---
@@ -374,8 +380,11 @@ def process_pdf_single_column(
     print(f"共{len(text_lines)}行（不含图片行）")
 
     results = []
+    inference_started = time.monotonic()
+    print(f"BERT inference starting: {len(text_lines)} lines, max_length={max_length}", flush=True)
     with torch.no_grad():
         for i, line in enumerate(text_lines):
+            line_started = time.monotonic()
             text = build_context_text(text_lines, i, window=context_window)
             extra = extract_extra_features(line)
             encoding = bert_tokenizer(
@@ -390,6 +399,12 @@ def process_pdf_single_column(
             pred_class = probs.argmax().item()
             label = ["I", "B", "J"][pred_class]
             results.append({"rich": line["rich"], "label": label, "page": line["page"]})
+            print(
+                f"BERT progress {i + 1}/{len(text_lines)}: "
+                f"line={time.monotonic() - line_started:.2f}s, "
+                f"total={time.monotonic() - inference_started:.2f}s",
+                flush=True,
+            )
 
     img_lines = [l for l in all_lines if l.get("is_image", False)]
     img_by_page = {}
